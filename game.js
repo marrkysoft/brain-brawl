@@ -1,8 +1,60 @@
-// --- BRAINBRAWL GAME ENGINE (EXPANDED EDITION) ---
+// --- BRAINBRAWL GAME ENGINE (AUDIO & HAPTICS EDITION) ---
+
+// Synthetic Web Audio & Haptics System (Zero external files needed!)
+const audioCtx = window.AudioContext || window.webkitAudioContext ? new (window.AudioContext || window.webkitAudioContext)() : null;
+
+function playTone(frequency, duration, type = 'sine') {
+    if (!audioCtx) return;
+    try {
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = frequency;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    } catch(e) {}
+}
+
+function triggerVibrate(pattern) {
+    if (navigator.vibrate) {
+        try { navigator.vibrate(pattern); } catch(e) {}
+    }
+}
+
+// Sound & Haptic Triggers
+function soundClick() {
+    playTone(400, 0.05, 'triangle');
+    triggerVibrate(20);
+}
+
+function soundCorrect() {
+    playTone(587.33, 0.1); // D5
+    setTimeout(() => playTone(880, 0.2), 100); // A5
+    triggerVibrate([50, 50, 100]);
+}
+
+function soundWrong() {
+    playTone(150, 0.2, 'sawtooth');
+    triggerVibrate(200);
+}
+
+function soundVictory() {
+    playTone(523.25, 0.15); // C5
+    setTimeout(() => playTone(659.25, 0.15), 150); // E5
+    setTimeout(() => playTone(783.99, 0.15), 300); // G5
+    setTimeout(() => playTone(1046.50, 0.4), 450); // C6
+    triggerVibrate([100, 50, 100, 50, 200]);
+}
 
 // Massive Educational & Savage Question Bank
 const questions = [
-    // Category: History & Weird Facts
     {
         q: "Did ancient Romans actually use human urine as mouthwash to whiten their teeth?",
         options: ["Yes, ammonia power!", "No, pure myth"],
@@ -19,9 +71,8 @@ const questions = [
         q: "Did Queen Elizabeth I own over 300 custom wigs and absolute face makeup made of lead?",
         options: ["True, toxic fashion", "No, natural beauty"],
         answer: 0,
-        fact: "True! Her lead-based makeup (Venetian Ceruse) eventually ruined her skin and health."
+        fact: "True! Her lead-based makeup eventually ruined her skin and health."
     },
-    // Category: Space & Science
     {
         q: "Can diamonds actually rain down from the sky on Saturn and Jupiter?",
         options: ["True, bling storms!", "False, space is dry"],
@@ -38,9 +89,8 @@ const questions = [
         q: "Does outer space smell like grilled steak and hot metal to astronauts?",
         options: ["True, space smells meaty", "No, it has zero scent"],
         answer: 0,
-        fact: "True! Dying stars emit polycyclic aromatic hydrocarbons that stick to spacesuits."
+        fact: "True! Dying stars emit aromatic compounds that stick to spacesuits."
     },
-    // Category: Bizarre Biology
     {
         q: "Do octopuses have three hearts and blue blood?",
         options: ["Yes, alien biology!", "No, just one heart"],
@@ -60,13 +110,6 @@ const questions = [
         fact: "True! Their unique intestinal elasticity forms distinct cube shapes to mark territory."
     },
     {
-        q: "Can immortal jellyfish theoretically live forever by reversing their lifecycle?",
-        options: ["True, biological cheat code", "No, they die normally"],
-        answer: 0,
-        fact: "True! When stressed, *Turritopsis dohrnii* reverts back to its polyp stage and starts over."
-    },
-    // Category: Pop Culture & Absurdity
-    {
         q: "Did someone actually try to sue God for millions of dollars in a federal lawsuit?",
         options: ["True, an Omaha resident", "No, urban legend"],
         answer: 0,
@@ -83,7 +126,7 @@ const questions = [
 // Game State Variables
 let peer = null;
 let conn = null;
-let myRole = ''; // 'host' or 'guest'
+let myRole = ''; 
 let myName = '';
 let opponentName = 'Opponent';
 let myScore = 0;
@@ -120,19 +163,18 @@ const resultSubtitle = document.getElementById('result-subtitle');
 const btnShareScore = document.getElementById('btn-share-score');
 const btnPlayAgain = document.getElementById('btn-play-again');
 
-// Helper: Switch Screens
 function showScreen(screen) {
     [screenMenu, screenLobby, screenGame, screenResults].forEach(s => s.classList.add('hidden'));
     screen.classList.remove('hidden');
 }
 
-// Generate Random 4-Letter Room Code
 function generateCode() {
     return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
 // --- NETWORK INITIALIZATION ---
 btnCreateRoom.addEventListener('click', () => {
+    soundClick();
     myName = inputPlayerName.value.trim() || 'Player 1';
     p1Label.innerText = myName;
     
@@ -141,13 +183,11 @@ btnCreateRoom.addEventListener('click', () => {
     displayRoomCode.innerText = roomCode;
     showScreen(screenLobby);
 
-    // Initialize PeerJS with room code prefix
     peer = new Peer('bb-' + roomCode);
 
     peer.on('connection', (connection) => {
         conn = connection;
         setupConnection();
-        // Send host name to guest
         conn.on('open', () => {
             conn.send({ type: 'INIT', name: myName });
         });
@@ -160,6 +200,7 @@ btnCreateRoom.addEventListener('click', () => {
 });
 
 btnJoinRoom.addEventListener('click', () => {
+    soundClick();
     myName = inputPlayerName.value.trim() || 'Player 2';
     p1Label.innerText = myName;
     
@@ -195,7 +236,6 @@ function setupConnection() {
         if (data.type === 'INIT') {
             opponentName = data.name;
             p2Label.innerText = opponentName;
-            // Start Game if Host
             if (myRole === 'host') {
                 setTimeout(startBattle, 1000);
             }
@@ -217,10 +257,8 @@ function setupConnection() {
 let activeQuestionsList = [];
 
 function startBattle() {
-    // Shuffle and pick 5 random questions out of our huge bank
     activeQuestionsList = [...questions].sort(() => 0.5 - Math.random()).slice(0, maxRounds);
     
-    // Send to guest
     conn.send({
         type: 'START_GAME',
         hostName: myName,
@@ -262,7 +300,6 @@ function renderQuestion() {
     startTimer();
 }
 
-// Timer for each question (10 seconds)
 let timeLeft = 10;
 function startTimer() {
     clearInterval(timerInterval);
@@ -284,6 +321,7 @@ function startTimer() {
 
 function lockAllAnswersOnTimeout() {
     isAnswerLocked = true;
+    soundWrong();
     const qData = activeQuestionsList[currentQuestionIndex];
     const buttons = optionsContainer.querySelectorAll('button');
     buttons.forEach((b, idx) => {
@@ -294,7 +332,6 @@ function lockAllAnswersOnTimeout() {
         }
     });
 
-    // Proceed to next round after short delay
     setTimeout(() => {
         proceedToNextRound();
     }, 2000);
@@ -307,7 +344,6 @@ function submitAnswer(selectedIndex, correctIndex, btnElement) {
 
     const isCorrect = (selectedIndex === correctIndex);
 
-    // Style buttons with vivid neon accents
     const buttons = optionsContainer.querySelectorAll('button');
     buttons.forEach((b, idx) => {
         if (idx === correctIndex) {
@@ -320,14 +356,15 @@ function submitAnswer(selectedIndex, correctIndex, btnElement) {
     });
 
     if (isCorrect) {
-        myScore += 100 + (timeLeft * 5); // Speed bonus points
+        soundCorrect();
+        myScore += 100 + (timeLeft * 5);
         p1ScoreElem.innerText = myScore;
+    } else {
+        soundWrong();
     }
 
-    // Broadcast score to opponent
     conn.send({ type: 'ANSWER', score: myScore });
 
-    // Proceed to next round after short delay
     setTimeout(() => {
         proceedToNextRound();
     }, 2000);
@@ -342,7 +379,6 @@ function proceedToNextRound() {
             renderQuestion();
         }
     } else {
-        // End of Game
         if (myRole === 'host') {
             setTimeout(() => {
                 conn.send({ type: 'GAME_OVER', finalMyScore: myScore, finalOpponentScore: opponentScore });
@@ -365,6 +401,7 @@ function loadNextQuestion(round, qIndex) {
 
 function showGameOver(myFinal, oppFinal) {
     showScreen(screenResults);
+    soundVictory();
     if (myFinal > oppFinal) {
         resultTitle.innerText = "VICTORY! 👑";
         resultSubtitle.innerText = `You dominated ${opponentName} with ${myFinal} points to ${oppFinal}!`;
@@ -379,6 +416,7 @@ function showGameOver(myFinal, oppFinal) {
 
 // --- VIRAL SHARE & REPLAY ---
 btnShareScore.addEventListener('click', () => {
+    soundClick();
     const shareText = `I just fought a 1v1 trivia duel on BrainBrawl! Score: ${myScore} vs ${opponentName}'s ${opponentScore}. Think you're smarter? Prove it here:`;
     if (navigator.share) {
         navigator.share({
@@ -393,5 +431,6 @@ btnShareScore.addEventListener('click', () => {
 });
 
 btnPlayAgain.addEventListener('click', () => {
+    soundClick();
     showScreen(screenMenu);
 });
