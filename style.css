@@ -1,0 +1,29 @@
+/* Custom Neon Glow & Touch Utilities */
+body {
+    touch-action: manipulation;
+}
+
+@keyframes neonPulse {
+    0%, 100% { 
+        box-shadow: 0 0 15px rgba(57, 255, 20, 0.25), inset 0 0 5px rgba(57, 255, 20, 0.1); 
+    }
+    50% { 
+        box-shadow: 0 0 30px rgba(57, 255, 20, 0.5), inset 0 0 10px rgba(57, 255, 20, 0.2); 
+    }
+}
+
+.neon-glow {
+    animation: neonPulse 3s infinite;
+}
+
+/* Custom scrollbar matching neon theme */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #000000;
+}
+::-webkit-scrollbar-thumb {
+    background: #39FF14;
+    border-radius: 3px;
+}
