@@ -1,6 +1,6 @@
-// --- BRAINBRAWL GAME ENGINE (AUDIO & HAPTICS EDITION) ---
+// --- BRAINBRAWL GAME ENGINE (REMATCH & EMOJI EDITION) ---
 
-// Synthetic Web Audio & Haptics System (Zero external files needed!)
+// Synthetic Web Audio & Haptics System
 const audioCtx = window.AudioContext || window.webkitAudioContext ? new (window.AudioContext || window.webkitAudioContext)() : null;
 
 function playTone(frequency, duration, type = 'sine') {
@@ -28,15 +28,14 @@ function triggerVibrate(pattern) {
     }
 }
 
-// Sound & Haptic Triggers
 function soundClick() {
     playTone(400, 0.05, 'triangle');
     triggerVibrate(20);
 }
 
 function soundCorrect() {
-    playTone(587.33, 0.1); // D5
-    setTimeout(() => playTone(880, 0.2), 100); // A5
+    playTone(587.33, 0.1);
+    setTimeout(() => playTone(880, 0.2), 100);
     triggerVibrate([50, 50, 100]);
 }
 
@@ -46,10 +45,10 @@ function soundWrong() {
 }
 
 function soundVictory() {
-    playTone(523.25, 0.15); // C5
-    setTimeout(() => playTone(659.25, 0.15), 150); // E5
-    setTimeout(() => playTone(783.99, 0.15), 300); // G5
-    setTimeout(() => playTone(1046.50, 0.4), 450); // C6
+    playTone(523.25, 0.15);
+    setTimeout(() => playTone(659.25, 0.15), 150);
+    setTimeout(() => playTone(783.99, 0.15), 300);
+    setTimeout(() => playTone(1046.50, 0.4), 450);
     triggerVibrate([100, 50, 100, 50, 200]);
 }
 
@@ -136,6 +135,7 @@ const maxRounds = 5;
 let currentQuestionIndex = 0;
 let timerInterval = null;
 let isAnswerLocked = false;
+let activeRoomCode = '';
 
 // DOM Elements
 const screenMenu = document.getElementById('screen-menu');
@@ -179,11 +179,11 @@ btnCreateRoom.addEventListener('click', () => {
     p1Label.innerText = myName;
     
     myRole = 'host';
-    const roomCode = generateCode();
-    displayRoomCode.innerText = roomCode;
+    activeRoomCode = generateCode();
+    displayRoomCode.innerText = activeRoomCode;
     showScreen(screenLobby);
 
-    peer = new Peer('bb-' + roomCode);
+    peer = new Peer('bb-' + activeRoomCode);
 
     peer.on('connection', (connection) => {
         conn = connection;
@@ -205,8 +205,8 @@ btnJoinRoom.addEventListener('click', () => {
     p1Label.innerText = myName;
     
     myRole = 'guest';
-    const code = inputRoomCode.value.trim().toUpperCase();
-    if (code.length < 4) {
+    activeRoomCode = inputRoomCode.value.trim().toUpperCase();
+    if (activeRoomCode.length < 4) {
         alert('Please enter a valid 4-character room code!');
         return;
     }
@@ -217,7 +217,7 @@ btnJoinRoom.addEventListener('click', () => {
     peer = new Peer();
 
     peer.on('open', () => {
-        conn = peer.connect('bb-' + code);
+        conn = peer.connect('bb-' + activeRoomCode);
         setupConnection();
         conn.on('open', () => {
             conn.send({ type: 'INIT', name: myName });
@@ -249,8 +249,69 @@ function setupConnection() {
             loadNextQuestion(data.round, data.qIndex);
         } else if (data.type === 'GAME_OVER') {
             showGameOver(data.finalMyScore, data.finalOpponentScore);
+        } else if (data.type === 'EMOJI') {
+            showFloatingEmoji(data.emoji);
+        } else if (data.type === 'REMATCH') {
+            if (myRole === 'host') {
+                startBattle();
+            } else {
+                showScreen(screenGame);
+            }
         }
     });
+}
+
+// --- EMOJI REACTIONS SYSTEM ---
+function injectEmojiBar() {
+    // Check if emoji bar already exists in game screen
+    if (document.getElementById('emoji-bar')) return;
+    
+    const emojiContainer = document.createElement('div');
+    emojiContainer.id = 'emoji-bar';
+    emojiContainer.className = 'flex justify-center gap-4 my-2';
+    
+    const emojis = ['🔥', '💀', '🤡', '🧠', '😂', '🚀'];
+    emojis.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = 'bg-zinc-900 hover:bg-zinc-800 border border-lime-500/40 p-2 rounded-xl text-lg shadow-[0_0_10px_rgba(57,255,20,0.15)] active:scale-90 transition-transform cursor-pointer';
+        btn.innerText = emoji;
+        btn.onclick = () => {
+            soundClick();
+            showFloatingEmoji(emoji);
+            if (conn && conn.open) {
+                conn.send({ type: 'EMOJI', emoji: emoji });
+            }
+        };
+        emojiContainer.appendChild(btn);
+    });
+
+    // Append right below scoreboard or question card
+    const gameMain = screenGame;
+    gameMain.insertBefore(emojiContainer, gameMain.children[1]);
+}
+
+function showFloatingEmoji(emoji) {
+    const floatDiv = document.createElement('div');
+    floatDiv.innerText = emoji;
+    floatDiv.className = 'fixed text-5xl z-50 pointer-events-none animate-bounce drop-shadow-[0_0_15px_rgba(57,255,20,0.8)]';
+    
+    // Random horizontal position across screen
+    const randomX = Math.floor(Math.random() * (window.innerWidth - 100)) + 50;
+    floatDiv.style.left = randomX + 'px';
+    floatDiv.style.bottom = '100px';
+    
+    document.body.appendChild(floatDiv);
+
+    // Animate and remove after 1.5 seconds
+    setTimeout(() => {
+        floatDiv.style.transition = 'all 1s ease-out';
+        floatDiv.style.transform = 'translateY(-200px) scale(1.5)';
+        floatDiv.style.opacity = '0';
+    }, 50);
+
+    setTimeout(() => {
+        floatDiv.remove();
+    }, 1200);
 }
 
 // --- GAME LOGIC ---
@@ -278,6 +339,7 @@ function startBattleClient(qList) {
     p2ScoreElem.innerText = opponentScore;
 
     showScreen(screenGame);
+    injectEmojiBar();
     renderQuestion();
 }
 
@@ -412,6 +474,20 @@ function showGameOver(myFinal, oppFinal) {
         resultTitle.innerText = "IT'S A DRAW! 🤝";
         resultSubtitle.innerText = `Absolute equal intellect. Both scored ${myFinal} points!`;
     }
+
+    // Update Play Again button to function as Rematch
+    btnPlayAgain.innerText = "REMATCH";
+    btnPlayAgain.onclick = () => {
+        soundClick();
+        if (conn && conn.open) {
+            conn.send({ type: 'REMATCH' });
+        }
+        if (myRole === 'host') {
+            startBattle();
+        } else {
+            showScreen(screenGame);
+        }
+    };
 }
 
 // --- VIRAL SHARE & REPLAY ---
@@ -428,9 +504,4 @@ btnShareScore.addEventListener('click', () => {
         navigator.clipboard.writeText(shareText + ' ' + window.location.href);
         alert('Result copied to clipboard! Share it in your group chats!');
     }
-});
-
-btnPlayAgain.addEventListener('click', () => {
-    soundClick();
-    showScreen(screenMenu);
 });
